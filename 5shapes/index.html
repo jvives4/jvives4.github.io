@@ -1,0 +1,153 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coldplay Icon Audio Visualizer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+        svg {
+            display: block;
+            margin: 20px auto;
+            background-color: #000;
+        }
+        .controls {
+            margin: 20px;
+        }
+        .icon-buttons {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .icon-button {
+            background-color: #444;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            margin: 0 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon-button:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>SVG Audio Visualizer</h1>
+    <div class="controls">
+        <input type="file" id="audioFile" accept="audio/*">
+        <br><br>
+        <audio id="audioPlayer" controls></audio>
+        <br><br>
+        <div class="icon-buttons">
+            <button class="icon-button" id="heartButton"><i class="fas fa-heart"></i></button>
+            <button class="icon-button" id="starButton"><i class="fas fa-star"></i></button>
+        </div>
+    </div>
+
+    <svg id="svgVisualizer" width="400" height="400" viewBox="0 0 100 100"></svg>
+
+    <script>
+        const fileInput = document.getElementById('audioFile');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const heartButton = document.getElementById('heartButton');
+        const starButton = document.getElementById('starButton');
+        const svgVisualizer = document.getElementById('svgVisualizer');
+
+        let audioContext, analyser, source, frequencyData;
+        let animationFrameId;
+
+        const heartPath = "M50,30 C60,20 70,20 75,30 80,40 70,50 50,70 30,50 20,40 25,30 30,20 40,20 50,30";
+        const starPath = "M50 15 L61.6 35 H85 L66 54 L72 81 L50 65 L28 81 L34 54 L15 35 H38.4 Z";
+
+        heartButton.addEventListener('click', () => generateShapes('heart'));
+        starButton.addEventListener('click', () => generateShapes('star'));
+        fileInput.addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('audio/')) {
+                const audioURL = URL.createObjectURL(file);
+                audioPlayer.src = audioURL;
+                audioPlayer.load();
+                initAudio(audioURL);
+            } else {
+                alert('Please upload a valid audio file.');
+            }
+        }
+
+        function initAudio(audioURL) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            const bufferLength = analyser.frequencyBinCount;
+            frequencyData = new Uint8Array(bufferLength);
+
+            source = audioContext.createMediaElementSource(audioPlayer);
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+
+            visualize();
+        }
+
+        function visualize() {
+            animationFrameId = requestAnimationFrame(visualize);
+            analyser.getByteFrequencyData(frequencyData);
+
+            const averageFrequency = frequencyData.reduce((a, b) => a + b) / frequencyData.length;
+            const scale = 0.5 + (averageFrequency / 255) * 2;
+            const hue = Math.round((averageFrequency / 255) * 360);
+
+            const shapes = svgVisualizer.children;
+            for (let shape of shapes) {
+                const dynamicScale = shape.dataset.scale * scale / 3;
+                shape.setAttribute('transform', `translate(${shape.dataset.x}, ${shape.dataset.y}) scale(${dynamicScale})`);
+                shape.setAttribute('fill', `hsl(${hue}, 100%, 50%)`);
+            }
+        }
+
+        function generateShapes(type) {
+            svgVisualizer.innerHTML = '';
+            const positions = [];
+
+            for (let i = 0; i < 10; i++) {
+                const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                shape.setAttribute('d', type === 'heart' ? heartPath : starPath);
+                shape.setAttribute('fill', 'hsl(0, 100%, 50%)');
+
+                let xPos, yPos;
+                do {
+                    xPos = Math.random() * 90 + 5; // 5-95 range
+                    yPos = Math.random() * 90 + 5; // 5-95 range
+                } while (positions.some(pos => Math.hypot(pos.x - xPos, pos.y - yPos) < 15));
+
+                positions.push({ x: xPos, y: yPos });
+
+                shape.setAttribute('data-x', xPos);
+                shape.setAttribute('data-y', yPos);
+                shape.setAttribute('data-scale', Math.random() * 0.5 + 0.5); // 0.5-1 range
+
+                shape.setAttribute('transform', `translate(${xPos}, ${yPos}) scale(${shape.dataset.scale / 3})`);
+                svgVisualizer.appendChild(shape);
+            }
+        }
+
+        audioPlayer.addEventListener('play', () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        });
+    </script>
+</body>
+</html>
